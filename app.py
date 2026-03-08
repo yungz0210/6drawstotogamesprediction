@@ -60,7 +60,7 @@ selected_month = st.sidebar.selectbox("Month", ["All"] + months)
 dows = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 selected_dow = st.sidebar.selectbox("Day of Week", ["All"] + dows)
 
-lookback = st.sidebar.number_input("Lookback Period (Draws)", min_value=10, max_value=len(df_all), value=100)
+lookback = st.sidebar.number_input("Lookback Period (Draws)", min_value=10, max_value=len(df_all), value=len(df_all), key=f"lookback_{game_selection}")
 
 # Apply filters
 df = df_all.copy()
