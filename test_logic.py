@@ -1,6 +1,7 @@
 import data_manager
 import analytics
 import predictor
+import probability_lab
 import pandas as pd
 
 def test_data_loading():
@@ -56,11 +57,34 @@ def test_predictor():
         assert 1 <= bonus <= 50
         print(f"Bonus prediction ({model}) test passed: {bonus}")
 
+def test_probability_lab():
+    print("Testing probability lab...")
+    df = data_manager.load_data("6/50")
+
+    # Test evaluation
+    m, hb, prize = probability_lab.evaluate_prediction([1, 2, 3, 10, 11, 12], [1, 2, 3, 4, 5, 6], 50, 50)
+    assert m == 3
+    assert hb == True
+    assert prize == 20
+    print("Evaluation test passed.")
+
+    # Test EV
+    ev = probability_lab.calculate_ev("6/50", 10000000)
+    assert ev > 0
+    print("EV calculation test passed.")
+
+    # Test Macro Backtest
+    res = probability_lab.backtest_macro(df, 50, "Mean Reversion (Due)", lookback=5)
+    assert "total_prize" in res
+    assert res["total_cost"] == 10.0
+    print("Macro backtest test passed.")
+
 if __name__ == "__main__":
     try:
         test_data_loading()
         test_analytics()
         test_predictor()
+        test_probability_lab()
         print("All tests passed!")
     except Exception as e:
         print(f"Tests failed: {e}")
