@@ -135,30 +135,61 @@ with tab2:
             results = predictor.monte_carlo_simulation(df, game_range)
             st.write("Top 5 simulated sets:")
             for i, r in enumerate(results):
-                st.write(f"Set {i+1}: {', '.join(map(str, r))}")
+                bonus_str = ""
+                if game_selection == "6/50":
+                    bonus = predictor.predict_bonus_number(df, game_range, model_choice)
+                    bonus_str = f" | Bonus: {bonus}"
+                st.write(f"Set {i+1}: {', '.join(map(str, r))}{bonus_str}")
         
         elif model_choice == "Mean Reversion (Due)":
             result = predictor.mean_reversion_due(df, game_range)
-            st.write(f"Predicted 'Due' Numbers: {', '.join(map(str, result))}")
+            bonus_str = ""
+            if game_selection == "6/50":
+                bonus = predictor.predict_bonus_number(df, game_range, model_choice)
+                bonus_str = f" | Bonus: {bonus}"
+            st.write(f"Predicted 'Due' Numbers: {', '.join(map(str, result))}{bonus_str}")
             
         elif model_choice == "Markov Chain Analysis":
             result = predictor.markov_chain_analysis(df, game_range)
-            st.write(f"Markov Chain Prediction: {', '.join(map(str, result))}")
+            bonus_str = ""
+            if game_selection == "6/50":
+                bonus = predictor.predict_bonus_number(df, game_range, model_choice)
+                bonus_str = f" | Bonus: {bonus}"
+            st.write(f"Markov Chain Prediction: {', '.join(map(str, result))}{bonus_str}")
             
         elif model_choice == "Hybrid/Ensemble Model":
             result = predictor.hybrid_ensemble(df, game_range)
-            st.write(f"Hybrid Ensemble Prediction: {', '.join(map(str, result))}")
+            bonus_str = ""
+            if game_selection == "6/50":
+                bonus = predictor.predict_bonus_number(df, game_range, model_choice)
+                bonus_str = f" | Bonus: {bonus}"
+            st.write(f"Hybrid Ensemble Prediction: {', '.join(map(str, result))}{bonus_str}")
 
 with tab3:
     st.header("Master Summary")
-    st.write("Top predictions for all games based on Hybrid Model")
+    summary_model = st.selectbox("Select Prediction Model for Summary", ["Markov Chain Analysis", "Monte Carlo Simulation", "Mean Reversion (Due)", "Hybrid/Ensemble Model"], index=0)
+    st.write(f"Top predictions for all games based on {summary_model}")
     
     for g in ["6/50", "6/55", "6/58"]:
         g_df = get_data(g)
         g_range = game_ranges[g]
-        pred = predictor.hybrid_ensemble(g_df, g_range)
+
+        if summary_model == "Markov Chain Analysis":
+            pred = predictor.markov_chain_analysis(g_df, g_range)
+        elif summary_model == "Monte Carlo Simulation":
+            pred = predictor.monte_carlo_simulation(g_df, g_range)[0]
+        elif summary_model == "Mean Reversion (Due)":
+            pred = predictor.mean_reversion_due(g_df, g_range)
+        else:
+            pred = predictor.hybrid_ensemble(g_df, g_range)
+
+        bonus_str = ""
+        if g == "6/50":
+            bonus = predictor.predict_bonus_number(g_df, g_range, summary_model)
+            bonus_str = f" | Recommended Bonus: {bonus}"
+
         st.subheader(f"Game {g}")
-        st.write(f"Recommended Set: {', '.join(map(str, pred))}")
+        st.write(f"Recommended Set: {', '.join(map(str, pred))}{bonus_str}")
         st.divider()
 
 # Footer
