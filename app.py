@@ -5,6 +5,7 @@ import plotly.graph_objects as go
 import data_manager
 import analytics
 import predictor
+import requests
 from datetime import datetime
 
 st.set_page_config(page_title="Sports Toto Analytics & Prediction", layout="wide")
@@ -20,12 +21,35 @@ game_range = game_ranges[game_selection]
 def get_data(game):
     return data_manager.load_data(game)
 
+@st.cache_data(show_spinner="Fetching zip data...")
+def get_zip_data(url):
+    response = requests.get(url)
+    if response.status_code == 200:
+        return response.content
+    return None
+
 if st.sidebar.button("Update Data Daily"):
     data_manager.download_and_extract()
     st.cache_data.clear()
     st.success("Data updated!")
 
 df_all = get_data(game_selection)
+
+# Display Latest Draw Date
+latest_date = df_all['DrawDate'].max()
+st.sidebar.info(f"Latest Draw Date: {latest_date.strftime('%Y-%m-%d')}")
+
+# Download buttons
+st.sidebar.subheader("Download Source Data")
+for game, url in data_manager.URLS.items():
+    zip_content = get_zip_data(url)
+    if zip_content:
+        st.sidebar.download_button(
+            label=f"Download {game} Zip",
+            data=zip_content,
+            file_name=f"Toto{game.replace('/', '')}.zip",
+            mime="application/zip"
+        )
 
 # Filters
 st.sidebar.subheader("Filters")
