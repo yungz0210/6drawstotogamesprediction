@@ -50,6 +50,12 @@ def test_predictor():
     assert len(hybrid) == 6
     print("Hybrid test passed.")
 
+    # Bonus prediction test
+    for model in ["Monte Carlo Simulation", "Mean Reversion (Due)", "Markov Chain Analysis", "Hybrid/Ensemble Model"]:
+        bonus = predictor.predict_bonus_number(df, 50, model)
+        assert 1 <= bonus <= 50
+        print(f"Bonus prediction ({model}) test passed: {bonus}")
+
 if __name__ == "__main__":
     try:
         test_data_loading()

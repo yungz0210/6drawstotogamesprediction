@@ -119,3 +119,46 @@ def hybrid_ensemble(df, game_range):
             selected.add(n)
     
     return sorted([int(x) for x in selected])
+
+def predict_bonus_number(df, game_range, model_type):
+    if 'BonusNo' not in df.columns:
+        return None
+
+    bonus_series = df['BonusNo'].dropna().astype(int)
+    if bonus_series.empty:
+        return None
+
+    if model_type == "Monte Carlo Simulation":
+        freq = Counter(bonus_series)
+        population = list(range(1, game_range + 1))
+        weights = [freq.get(i, 0) + 1 for i in population]
+        return random.choices(population, weights=weights, k=1)[0]
+
+    elif model_type == "Mean Reversion (Due)":
+        last_seen = {i: 9999 for i in range(1, game_range + 1)}
+        # df is descending
+        for idx, val in enumerate(df['BonusNo']):
+            if pd.isna(val): continue
+            val = int(val)
+            if val in last_seen and last_seen[val] == 9999:
+                last_seen[val] = idx
+        due_nums = sorted(last_seen.keys(), key=lambda x: last_seen[x], reverse=True)
+        return due_nums[0]
+
+    elif model_type == "Markov Chain Analysis" or model_type == "Hybrid/Ensemble Model":
+        matrix = np.zeros((game_range + 1, game_range + 1))
+        vals = bonus_series.values[::-1] # Ascending order
+        for i in range(len(vals) - 1):
+            if vals[i] <= game_range and vals[i+1] <= game_range:
+                matrix[vals[i]][vals[i+1]] += 1
+
+        last_bonus = vals[-1]
+        if last_bonus <= game_range:
+            predicted = np.argmax(matrix[last_bonus])
+            if predicted != 0 and matrix[last_bonus][predicted] > 0:
+                return int(predicted)
+
+        # Fallback
+        return Counter(vals).most_common(1)[0][0]
+
+    return None
