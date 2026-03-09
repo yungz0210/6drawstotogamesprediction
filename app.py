@@ -213,7 +213,7 @@ with tab4:
             actual_bonus = actual_row.get('BonusNo')
 
             # Use only data available PRIOR to this date
-            historical_df = df_all[df_all['DrawDate'].dt.date > selected_date]
+            historical_df = df_all[df_all['DrawDate'].dt.date < selected_date]
 
             if len(historical_df) < 20:
                 st.warning("Not enough historical data before this date to generate a reliable prediction.")
