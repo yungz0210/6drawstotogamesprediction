@@ -11,6 +11,14 @@ from datetime import datetime
 
 st.set_page_config(page_title="Sports Toto Analytics & Prediction", layout="wide")
 
+# Automatic data update on startup
+@st.cache_resource
+def startup_update():
+    data_manager.download_and_extract()
+    return datetime.now()
+
+startup_update()
+
 # Sidebar
 st.sidebar.title("Global Controls")
 game_selection = st.sidebar.selectbox("Select Game", ["6/50", "6/55", "6/58"])
