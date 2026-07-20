@@ -4,3 +4,6 @@ numpy
 plotly
 requests
 curl_cffi
+scikit-learn
+beautifulsoup4
+

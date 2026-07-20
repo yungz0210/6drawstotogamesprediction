@@ -1,7 +1,14 @@
 import numpy as np
 import pandas as pd
-from sklearn.ensemble import RandomForestClassifier
 from collections import Counter
+
+try:
+    from sklearn.ensemble import RandomForestClassifier
+    HAS_SKLEARN = True
+except ImportError:
+    HAS_SKLEARN = False
+    RandomForestClassifier = None
+
 
 def extract_ticket_features(ticket, game_range, freq_map=None, drought_map=None):
     """
@@ -47,6 +54,9 @@ def train_ml_evaluator(df, game_range):
             if drought_map[int(n)] == 999:
                 drought_map[int(n)] = idx
 
+    if not HAS_SKLEARN:
+        return None, freq_map, drought_map
+
     X = []
     y = []
     
@@ -75,6 +85,16 @@ def predict_ticket_ml_score(model_tuple, ticket, game_range):
     Evaluates a candidate ticket and returns ML Confidence score (0 to 100%).
     """
     clf, freq_map, drought_map = model_tuple
+    if clf is None or not HAS_SKLEARN:
+        # Fallback heuristic calculation if scikit-learn is missing
+        feats = extract_ticket_features(ticket, game_range, freq_map, drought_map)
+        sum_tot = feats[0]
+        sum_score = 40.0 if (110 <= sum_tot <= 230) else 20.0
+        gap_score = min(30.0, feats[5] * 3.0)
+        freq_score = min(30.0, feats[7] * 0.1)
+        return round(sum_score + gap_score + freq_score, 1)
+        
     feats = extract_ticket_features(ticket, game_range, freq_map, drought_map)
     prob = clf.predict_proba([feats])[0][1]
     return round(float(prob) * 100.0, 1)
+
