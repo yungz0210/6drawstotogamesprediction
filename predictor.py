@@ -162,3 +162,41 @@ def predict_bonus_number(df, game_range, model_type):
         return Counter(vals).most_common(1)[0][0]
 
     return None
+
+def anti_popularity_model(df, game_range, count=5):
+    """
+    Generates sets optimized for Anti-Popularity / Unshared Jackpot Potential.
+    Favors numbers > 31 (outside birthday range) and high gap diversity.
+    """
+    import filters
+    
+    population = list(range(1, game_range + 1))
+    high_nums = [n for n in population if n > 31]
+    low_nums = [n for n in population if n <= 31]
+    
+    candidates = []
+    # Generate 500 candidate sets
+    for _ in range(500):
+        # Pick 3 to 5 high numbers, remainder low numbers
+        n_high = random.choice([3, 4, 5])
+        if len(high_nums) < n_high:
+            n_high = len(high_nums)
+        picked_high = random.sample(high_nums, n_high)
+        picked_low = random.sample(low_nums, 6 - n_high)
+        ticket = sorted(picked_high + picked_low)
+        candidates.append(ticket)
+        
+    filtered = filters.filter_tickets(candidates, game_range=game_range, max_bday=3, sum_filter=True)
+    if not filtered:
+        filtered = candidates
+        
+    # Return top 'count' sets
+    unique_sets = []
+    for t in filtered:
+        if t not in unique_sets:
+            unique_sets.append(t)
+        if len(unique_sets) >= count:
+            break
+            
+    return unique_sets
+
