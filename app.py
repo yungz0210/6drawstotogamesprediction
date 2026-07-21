@@ -89,24 +89,38 @@ for game, url in data_manager.URLS.items():
         )
 
 # Filters
-st.sidebar.subheader("🔍 Date Filters")
-years = sorted(df_all['DrawDate'].dt.year.unique(), reverse=True)
-selected_year = st.sidebar.selectbox("Year", ["All"] + list(years))
-months = list(range(1, 13))
-selected_month = st.sidebar.selectbox("Month", ["All"] + months)
-dows = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-selected_dow = st.sidebar.selectbox("Day of Week", ["All"] + dows)
+st.sidebar.subheader("🔍 Date & Timeframe Filters")
 
-lookback = st.sidebar.number_input("Lookback Period (Draws)", min_value=10, max_value=len(df_all), value=len(df_all), key=f"lookback_{game_selection}")
+timeframe_presets = ["All Time", "10 Years", "5 Years", "3 Years", "1 Year", "6 Months", "3 Months"]
+selected_timeframe = st.sidebar.selectbox("⚡ Quick Timeframe Preset", timeframe_presets, index=0, key=f"timeframe_{game_selection}")
 
-# Apply filters
-df = df_all.copy()
+# Apply timeframe preset first
+df = analytics.filter_by_timeframe(df_all, selected_timeframe)
+
+# Additional date fine-tuning
+with st.sidebar.expander("⚙️ Fine-Tune Date Filters"):
+    years = sorted(df_all['DrawDate'].dt.year.unique(), reverse=True)
+    selected_year = st.selectbox("Year", ["All"] + list(years), key=f"year_{game_selection}")
+    months = list(range(1, 13))
+    selected_month = st.selectbox("Month", ["All"] + months, key=f"month_{game_selection}")
+    dows = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+    selected_dow = st.selectbox("Day of Week", ["All"] + dows, key=f"dow_{game_selection}")
+
 if selected_year != "All":
     df = analytics.filter_by_date(df, year=selected_year)
 if selected_month != "All":
     df = analytics.filter_by_date(df, month=selected_month)
 if selected_dow != "All":
     df = analytics.filter_by_date(df, dow=dows.index(selected_dow))
+
+max_lookback = len(df) if len(df) >= 10 else 10
+lookback = st.sidebar.number_input("Lookback Period (Draws)", min_value=10, max_value=max_lookback, value=max_lookback, key=f"lookback_{game_selection}")
+
+if not df.empty:
+    min_date_str = df['DrawDate'].min().strftime('%Y-%m-%d')
+    max_date_str = df['DrawDate'].max().strftime('%Y-%m-%d')
+    st.sidebar.caption(f"📊 **Active Data:** `{len(df)} draws`\n📅 `{min_date_str}` to `{max_date_str}`")
+
 
 # Train ML Evaluator once per session/game
 @st.cache_resource

@@ -82,3 +82,28 @@ def filter_by_date(df, year=None, month=None, dow=None):
     if dow is not None:
         filtered_df = filtered_df[filtered_df['DrawDate'].dt.dayofweek == dow]
     return filtered_df
+
+def filter_by_timeframe(df, preset="All Time"):
+    if df.empty or preset == "All Time" or preset is None:
+        return df.copy()
+        
+    max_date = df['DrawDate'].max()
+    filtered_df = df.copy()
+    
+    if preset == "3 Months":
+        cutoff = max_date - pd.DateOffset(months=3)
+    elif preset == "6 Months":
+        cutoff = max_date - pd.DateOffset(months=6)
+    elif preset == "1 Year":
+        cutoff = max_date - pd.DateOffset(years=1)
+    elif preset == "3 Years":
+        cutoff = max_date - pd.DateOffset(years=3)
+    elif preset == "5 Years":
+        cutoff = max_date - pd.DateOffset(years=5)
+    elif preset == "10 Years":
+        cutoff = max_date - pd.DateOffset(years=10)
+    else:
+        return filtered_df
+        
+    return filtered_df[filtered_df['DrawDate'] >= cutoff]
+

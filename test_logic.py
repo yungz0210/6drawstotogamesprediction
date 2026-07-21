@@ -31,6 +31,17 @@ def test_analytics():
     assert len(oe) > 0
     print("Odd/Even ratio test passed.")
 
+    # Timeframe filtering test
+    df_3m = analytics.filter_by_timeframe(df, "3 Months")
+    df_1y = analytics.filter_by_timeframe(df, "1 Year")
+    df_5y = analytics.filter_by_timeframe(df, "5 Years")
+    df_all = analytics.filter_by_timeframe(df, "All Time")
+
+    assert len(df_3m) <= len(df_1y) <= len(df_5y) <= len(df_all)
+    assert len(df_all) == len(df)
+    print("Timeframe preset filtering test passed.")
+
+
 def test_predictor():
     print("Testing predictor...")
     df = data_manager.load_data("6/50")
