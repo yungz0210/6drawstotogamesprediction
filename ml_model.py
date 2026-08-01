@@ -2,6 +2,8 @@ import numpy as np
 import pandas as pd
 from collections import Counter
 
+PRIMES = {2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59}
+
 try:
     from sklearn.ensemble import RandomForestClassifier
     HAS_SKLEARN = True
@@ -12,7 +14,7 @@ except ImportError:
 
 def extract_ticket_features(ticket, game_range, freq_map=None, drought_map=None):
     """
-    Extracts statistical features for ML classification.
+    Extracts advanced statistical feature vectors for ML classification.
     """
     ticket = sorted([int(n) for n in ticket])
     sum_tot = sum(ticket)
@@ -20,10 +22,13 @@ def extract_ticket_features(ticket, game_range, freq_map=None, drought_map=None)
     even_c = 6 - odd_c
     bday_c = sum(1 for n in ticket if n <= 31)
     high_c = sum(1 for n in ticket if n > (game_range // 2))
+    prime_c = sum(1 for n in ticket if n in PRIMES)
     
     deltas = [ticket[i+1] - ticket[i] for i in range(len(ticket)-1)]
-    delta_mean = float(np.mean(deltas))
-    delta_std = float(np.std(deltas))
+    delta_mean = float(np.mean(deltas)) if deltas else 0.0
+    delta_std = float(np.std(deltas)) if deltas else 0.0
+    delta_max = float(max(deltas)) if deltas else 0.0
+    consec_c = sum(1 for g in deltas if g == 1)
     
     avg_freq = 0.0
     if freq_map:
@@ -33,7 +38,11 @@ def extract_ticket_features(ticket, game_range, freq_map=None, drought_map=None)
     if drought_map:
         avg_drought = float(np.mean([drought_map.get(n, 0) for n in ticket]))
         
-    return [sum_tot, odd_c, even_c, bday_c, high_c, delta_mean, delta_std, avg_freq, avg_drought]
+    return [
+        sum_tot, odd_c, even_c, bday_c, high_c, prime_c, 
+        delta_mean, delta_std, delta_max, consec_c, 
+        avg_freq, avg_drought
+    ]
 
 def train_ml_evaluator(df, game_range):
     """
@@ -75,7 +84,7 @@ def train_ml_evaluator(df, game_range):
         X.append(feats)
         y.append(0)
         
-    clf = RandomForestClassifier(n_estimators=100, random_state=42, max_depth=8)
+    clf = RandomForestClassifier(n_estimators=120, random_state=42, max_depth=10)
     clf.fit(X, y)
     
     return clf, freq_map, drought_map
@@ -90,11 +99,12 @@ def predict_ticket_ml_score(model_tuple, ticket, game_range):
         feats = extract_ticket_features(ticket, game_range, freq_map, drought_map)
         sum_tot = feats[0]
         sum_score = 40.0 if (110 <= sum_tot <= 230) else 20.0
-        gap_score = min(30.0, feats[5] * 3.0)
-        freq_score = min(30.0, feats[7] * 0.1)
+        gap_score = min(30.0, feats[6] * 3.0)
+        freq_score = min(30.0, feats[10] * 0.1)
         return round(sum_score + gap_score + freq_score, 1)
         
     feats = extract_ticket_features(ticket, game_range, freq_map, drought_map)
     prob = clf.predict_proba([feats])[0][1]
     return round(float(prob) * 100.0, 1)
+
 

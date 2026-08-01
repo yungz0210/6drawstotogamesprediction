@@ -10,6 +10,7 @@ import probability_lab
 import wheeling
 import filters
 import ml_model
+import toto4d_studio
 from datetime import datetime
 
 st.set_page_config(page_title="Sports Toto Analytics & Prediction Studio", layout="wide", page_icon="🎰")
@@ -33,6 +34,10 @@ game_range = game_ranges[game_selection]
 def get_data(game):
     return data_manager.load_data(game)
 
+@st.cache_data(show_spinner="Loading 4D data...")
+def get_4d_data():
+    return data_manager.load_4d_data()
+
 @st.cache_data(show_spinner="Fetching zip data...")
 def get_zip_data(url):
     return data_manager.fetch_zip_bytes(url)
@@ -47,6 +52,7 @@ if st.sidebar.button("🔄 Update Data Daily"):
     st.sidebar.success("Data updated!")
 
 df_all = get_data(game_selection)
+df_4d = get_4d_data()
 
 # Display Latest Draw Date
 latest_date = df_all['DrawDate'].max()
@@ -131,12 +137,13 @@ def get_ml_model(game):
 trained_ml = get_ml_model(game_selection)
 
 # Tabs
-tab1, tab2, tab3, tab4, tab5 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
     "📊 Insights & Stats", 
     "🔮 Predictor Studio", 
     "🎡 Combinatorial Wheeling", 
     "🏆 Master Summary", 
-    "🧪 Backtesting & Probability Lab"
+    "🧪 Backtesting & Probability Lab",
+    "🎯 4D & Toto 4D Jackpot Studio"
 ])
 
 # ----------------- TAB 1: Insights & Stats -----------------
@@ -211,6 +218,22 @@ with tab2:
     with col_m2:
         max_bday_filter = st.slider("Max Birthday Numbers (<=31)", min_value=1, max_value=6, value=3)
 
+    with st.expander("⚙️ Fine-Tune Advanced Statistical Filters"):
+        f_col1, f_col2, f_col3 = st.columns(3)
+        with f_col1:
+            max_repeat_filter = st.slider("Max Repeats from Last Draw", min_value=0, max_value=3, value=1)
+        with f_col2:
+            max_consec_filter = st.slider("Max Consecutive Numbers", min_value=0, max_value=3, value=2)
+        with f_col3:
+            enforce_sum_filter = st.checkbox("Enforce Bell-Curve Sum Range", value=True)
+
+    # Most recent draw for repeat filtering
+    last_draw_nums = None
+    if not df.empty:
+        last_row = df.iloc[0]
+        main_cols = ['DrawnNo1', 'DrawnNo2', 'DrawnNo3', 'DrawnNo4', 'DrawnNo5', 'DrawnNo6']
+        last_draw_nums = [last_row[c] for c in main_cols if c in last_row]
+
     if st.button("🚀 Generate Candidate Ticket Sets", type="primary"):
         sets_to_display = []
         
@@ -218,7 +241,15 @@ with tab2:
             sets_to_display = predictor.anti_popularity_model(df, game_range, count=5)
         elif model_choice == "Monte Carlo Simulation":
             raw_sets = predictor.monte_carlo_simulation(df, game_range)
-            sets_to_display = filters.filter_tickets(raw_sets, game_range=game_range, max_bday=max_bday_filter)
+            sets_to_display = filters.filter_tickets(
+                raw_sets, 
+                game_range=game_range, 
+                max_bday=max_bday_filter,
+                sum_filter=enforce_sum_filter,
+                max_consecutive=max_consec_filter,
+                max_repeat=max_repeat_filter,
+                last_draw=last_draw_nums
+            )
             if not sets_to_display: sets_to_display = raw_sets
         elif model_choice == "Mean Reversion (Due)":
             raw = predictor.mean_reversion_due(df, game_range)
@@ -227,13 +258,23 @@ with tab2:
             raw = predictor.markov_chain_analysis(df, game_range)
             sets_to_display = [raw]
         else: # Hybrid
-            sets_to_display = [predictor.hybrid_ensemble(df, game_range) for _ in range(5)]
+            raw_sets = [predictor.hybrid_ensemble(df, game_range) for _ in range(10)]
+            sets_to_display = filters.filter_tickets(
+                raw_sets,
+                game_range=game_range,
+                max_bday=max_bday_filter,
+                sum_filter=enforce_sum_filter,
+                max_consecutive=max_consec_filter,
+                max_repeat=max_repeat_filter,
+                last_draw=last_draw_nums
+            )
+            if not sets_to_display: sets_to_display = raw_sets[:5]
 
         st.subheader("🎯 Recommended Candidate Ticket Sets")
         
         export_rows = []
-        for i, ticket in enumerate(sets_to_display):
-            analysis = filters.analyze_ticket_entropy(ticket, game_range)
+        for i, ticket in enumerate(sets_to_display[:5]):
+            analysis = filters.analyze_ticket_entropy(ticket, game_range, last_draw=last_draw_nums)
             ml_score = ml_model.predict_ticket_ml_score(trained_ml, ticket, game_range)
             
             bonus_str = ""
@@ -257,52 +298,83 @@ with tab2:
                 "Solo_Jackpot_Score": analysis['solo_jackpot_score'],
                 "ML_Pattern_Score": f"{ml_score}%",
                 "Sum": analysis['sum'],
-                "Birthday_Nums_Count": analysis['bday_count']
+                "Birthday_Nums_Count": analysis['bday_count'],
+                "Prime_Nums_Count": analysis['prime_count'],
+                "Last_Draw_Repeats": analysis['repeat_count']
             })
             st.divider()
 
         # Ticket Slip Exporter
-        exp_df = pd.DataFrame(export_rows)
-        csv_data = exp_df.to_csv(index=False)
-        st.download_button(
-            label="📥 Export Ticket Slips to CSV",
-            data=csv_data,
-            file_name=f"Toto_{game_selection.replace('/', '')}_Tickets.csv",
-            mime="text/csv"
-        )
+        if export_rows:
+            exp_df = pd.DataFrame(export_rows)
+            csv_data = exp_df.to_csv(index=False)
+            st.download_button(
+                label="📥 Export Ticket Slips to CSV",
+                data=csv_data,
+                file_name=f"Toto_{game_selection.replace('/', '')}_Tickets.csv",
+                mime="text/csv"
+            )
 
 # ----------------- TAB 3: Combinatorial Wheeling Studio -----------------
 with tab3:
     st.header("🎡 Combinatorial Wheeling Studio")
     st.markdown("""
-    **Combinatorial Wheeling** allows you to pick a pool of candidate numbers (e.g. 8 to 14 numbers) and automatically 
-    generates an abbreviated wheel that guarantees prize coverage while cutting total ticket costs by **up to 75%**!
+    **Combinatorial Wheeling** allows you to pick a pool of candidate numbers (e.g. 8 to 16 numbers) and automatically 
+    generates an abbreviated wheel or banker wheel that guarantees prize coverage while cutting total ticket costs by **up to 80%**!
     """)
     
     col_w1, col_w2 = st.columns([2, 1])
     with col_w1:
         # Default pool selection using hot numbers
         freq_dict = analytics.get_frequency(df, lookback=100)
-        top_hot = [n for n, c in freq_dict.most_common(12)]
+        top_hot = [n for n, c in freq_dict.most_common(14)]
         
         pool_selection = st.multiselect(
-            "Select Your Pool of Candidate Numbers (8 to 14 numbers recommended):",
+            "Select Your Pool of Candidate Numbers (8 to 16 numbers recommended):",
             options=list(range(1, game_range + 1)),
             default=sorted(top_hot[:10])
         )
+        
+        banker_selection = st.multiselect(
+            "📌 Select Banker / Key Numbers (Must appear in EVERY ticket slip):",
+            options=pool_selection,
+            default=[]
+        )
     
     with col_w2:
-        wheel_type = st.radio("Wheel Strategy", ["Abbreviated Wheel (4-if-4 Guarantee)", "Full Wheel (100% Coverage)"])
+        wheel_type = st.radio(
+            "Wheel Guarantee Strategy", 
+            [
+                "Abbreviated Wheel (4-if-4 Guarantee)", 
+                "Abbreviated Wheel (3-if-3 Guarantee)",
+                "Abbreviated Wheel (5-if-5 Guarantee)",
+                "Full Wheel (100% Coverage)"
+            ]
+        )
 
     if len(pool_selection) < 6:
         st.warning("Please select at least 6 numbers for your pool.")
     else:
-        if wheel_type == "Abbreviated Wheel (4-if-4 Guarantee)":
-            wheeled_tickets = wheeling.generate_abbreviated_wheel(pool_selection, target_match=4, pool_match=4)
+        if banker_selection:
+            if wheel_type == "Abbreviated Wheel (3-if-3 Guarantee)":
+                wheeled_tickets = wheeling.generate_key_number_wheel(pool_selection, banker_selection, target_match=3, pool_match=3)
+            elif wheel_type == "Abbreviated Wheel (5-if-5 Guarantee)":
+                wheeled_tickets = wheeling.generate_key_number_wheel(pool_selection, banker_selection, target_match=5, pool_match=5)
+            elif wheel_type == "Full Wheel (100% Coverage)":
+                wheeled_tickets = wheeling.generate_key_number_wheel(pool_selection, banker_selection, target_match=6, pool_match=6)
+            else:
+                wheeled_tickets = wheeling.generate_key_number_wheel(pool_selection, banker_selection, target_match=4, pool_match=4)
         else:
-            wheeled_tickets = wheeling.generate_full_wheel(pool_selection)
+            if wheel_type == "Abbreviated Wheel (3-if-3 Guarantee)":
+                wheeled_tickets = wheeling.generate_abbreviated_wheel(pool_selection, target_match=3, pool_match=3)
+            elif wheel_type == "Abbreviated Wheel (5-if-5 Guarantee)":
+                wheeled_tickets = wheeling.generate_abbreviated_wheel(pool_selection, target_match=5, pool_match=5)
+            elif wheel_type == "Full Wheel (100% Coverage)":
+                wheeled_tickets = wheeling.generate_full_wheel(pool_selection)
+            else:
+                wheeled_tickets = wheeling.generate_abbreviated_wheel(pool_selection, target_match=4, pool_match=4)
             
-        summary = wheeling.get_wheel_summary(pool_selection, wheeled_tickets)
+        summary = wheeling.get_wheel_summary(pool_selection, wheeled_tickets, key_numbers=banker_selection)
         
         st.subheader("💰 Wheeling Cost & Optimization Breakdown")
         m_col1, m_col2, m_col3, m_col4 = st.columns(4)
@@ -311,6 +383,9 @@ with tab3:
         m_col3.metric("Total Investment", f"RM {summary['total_cost_rm']:.2f}")
         m_col4.metric("Cost Savings vs Full Wheel", f"{summary['savings_percentage']:.1f}%")
         
+        if banker_selection:
+            st.info(f"📌 **Banker Numbers Locked:** `{', '.join(map(str, banker_selection))}` (Included in all {summary['total_tickets']} tickets)")
+
         st.subheader("🎟️ Generated Ticket Slips")
         wheel_export = []
         for idx, t in enumerate(wheeled_tickets):
@@ -447,6 +522,98 @@ with tab5:
         else:
             st.error("🔴 Negative EV. Jackpot prize is below the statistical breakeven threshold.")
 
+# ----------------- TAB 6: 4D & Toto 4D Jackpot Studio -----------------
+with tab6:
+    st.header("🎯 4D & Sports Toto 4D Jackpot Studio")
+    st.markdown("""
+    Welcome to the **4D & Toto 4D Jackpot Studio**!
+    Analyze 4D digit distributions, generate **Box Play / i-Perm** permutations, wheel **System 4D Jackpot pairs** ($\sim 1 \text{ in } 16.67\text{M}$ odds), and build **Anti-Popularity 4D sets**.
+    """)
+    
+    sec_a, sec_b = st.tabs(["📊 4D Digit Analytics", "🎲 Permutation & Jackpot Pair Generators"])
+    
+    with sec_a:
+        st.subheader("📈 Position-Wise Digit Frequency (D1, D2, D3, D4)")
+        freq_matrix = toto4d_studio.analyze_4d_digit_frequencies(df_4d)
+        
+        col_d1, col_d2 = st.columns(2)
+        with col_d1:
+            df_d1_d2 = pd.DataFrame({
+                'Digit': [str(i) for i in range(10)],
+                'D1 (1st Digit)': [freq_matrix['D1'][str(i)] for i in range(10)],
+                'D2 (2nd Digit)': [freq_matrix['D2'][str(i)] for i in range(10)]
+            })
+            fig_pos1 = px.bar(df_d1_d2, x='Digit', y=['D1 (1st Digit)', 'D2 (2nd Digit)'], barmode='group', title="Position D1 & D2 Digit Distribution")
+            st.plotly_chart(fig_pos1, use_container_width=True)
+            
+        with col_d2:
+            df_d3_d4 = pd.DataFrame({
+                'Digit': [str(i) for i in range(10)],
+                'D3 (3rd Digit)': [freq_matrix['D3'][str(i)] for i in range(10)],
+                'D4 (4th Digit)': [freq_matrix['D4'][str(i)] for i in range(10)]
+            })
+            fig_pos2 = px.bar(df_d3_d4, x='Digit', y=['D3 (3rd Digit)', 'D4 (4th Digit)'], barmode='group', title="Position D3 & D4 Digit Distribution")
+            st.plotly_chart(fig_pos2, use_container_width=True)
+
+    with sec_b:
+        sub_c1, sub_c2 = st.columns(2)
+        
+        with sub_c1:
+            st.subheader("📦 Box Play / i-Perm Permutation Wheel")
+            input_4d = st.text_input("Enter a 4-Digit Number (e.g. 1234 or 8812):", value="1234")
+            
+            if st.button("Generate 4D Permutations"):
+                perms, label, cost = toto4d_studio.generate_4d_permutations(input_4d)
+                st.success(f"**Permutation Type:** `{label}` | **Total Permutations:** `{len(perms)}`")
+                st.metric("Total Investment (Standard RM 1/perm)", f"RM {cost:.2f}")
+                
+                st.write("Generated Permutation Slips:")
+                st.code(", ".join(perms), language="text")
+                
+        with sub_c2:
+            st.subheader("💰 System 4D Jackpot Pair Generator")
+            st.caption("Select a pool of 4D numbers to generate all 2-pair combinations for Toto 4D Jackpot 1/2.")
+            
+            pool_input = st.text_area(
+                "Enter Pool of 4D Numbers (separated by commas or newlines):",
+                value="1234, 5678, 8888, 0168, 9999"
+            )
+            
+            if st.button("🚀 Generate 4D Jackpot Pairs", type="primary"):
+                nums = [n.strip() for n in pool_input.replace('\n', ',').split(',') if n.strip()]
+                pairs, num_pairs, total_cost = toto4d_studio.generate_system_4d_jackpot(nums)
+                
+                if num_pairs == 0:
+                    st.warning("Please enter at least 2 valid 4D numbers.")
+                else:
+                    st.success(f"**Pool Size:** {len(set(nums))} Numbers | **Jackpot Pairs Generated:** {num_pairs}")
+                    st.metric("Total Ticket Investment (RM 2/pair)", f"RM {total_cost:.2f}")
+                    
+                    jp_export = []
+                    for idx, (p1, p2) in enumerate(pairs):
+                        st.code(f"Pair #{idx+1:02d}:  [ {p1} + {p2} ]", language="text")
+                        jp_export.append({"Pair_ID": idx+1, "Number_1": p1, "Number_2": p2, "Combination": f"{p1} + {p2}"})
+                        
+                    jp_df = pd.DataFrame(jp_export)
+                    st.download_button(
+                        label="📥 Download Printable 4D Jackpot Pairs (CSV)",
+                        data=jp_df.to_csv(index=False),
+                        file_name="Toto_4D_Jackpot_Pairs.csv",
+                        mime="text/csv"
+                    )
+
+        st.divider()
+        st.subheader("🛡️ Anti-Popularity / Unshared 4D Candidate Generator")
+        if st.button("🎲 Generate Unshared 4D Candidates"):
+            anti_4d = toto4d_studio.generate_anti_popularity_4d(count=10)
+            st.write("Top 10 Anti-Popularity 4D Candidates (Avoids birth years & common sequences):")
+            
+            cols_ap = st.columns(5)
+            for idx, num in enumerate(anti_4d):
+                with cols_ap[idx % 5]:
+                    st.metric(f"Candidate #{idx+1}", num)
+
 # Footer
 st.markdown("---")
 st.markdown("<p style='text-align: center; color: gray;'>🎰 Sports Toto Analytics Studio • For Entertainment & Analytical Purposes Only. Play Responsibly.</p>", unsafe_allow_html=True)
+
