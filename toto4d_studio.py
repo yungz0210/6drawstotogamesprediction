@@ -84,7 +84,6 @@ def generate_anti_popularity_4d(count=10):
 def analyze_4d_digit_frequencies(df_4d=None):
     """
     Calculates position-wise digit frequency matrix for positions D1, D2, D3, D4.
-    If no df_4d provided, generates statistical baseline frequency.
     """
     freq_matrix = {pos: Counter() for pos in ['D1', 'D2', 'D3', 'D4']}
     
@@ -99,10 +98,95 @@ def analyze_4d_digit_frequencies(df_4d=None):
                     freq_matrix['D3'][s[2]] += 1
                     freq_matrix['D4'][s[3]] += 1
     else:
-        # Generate baseline distribution with minor natural noise
         digits = [str(i) for i in range(10)]
         for pos in ['D1', 'D2', 'D3', 'D4']:
             for d in digits:
                 freq_matrix[pos][d] = random.randint(45, 65)
                 
     return freq_matrix
+
+def analyze_4d_patterns(df_4d=None):
+    """
+    Classifies historical 4D draws into digit structure patterns:
+    - Single (4 unique digits e.g. 1234) -> 24-way
+    - Double (1 pair e.g. 1123) -> 12-way
+    - Double-Double (2 pairs e.g. 1122) -> 6-way
+    - Triple (3 same digits e.g. 1112) -> 4-way
+    - Quad (all same e.g. 1111) -> 1-way
+    """
+    patterns = Counter()
+    if df_4d is not None and not df_4d.empty:
+        cols = [c for c in df_4d.columns if any(k in c.lower() for k in ['1st', '2nd', '3rd'])]
+        for col in cols:
+            for val in df_4d[col].dropna():
+                s = format_4d(val)
+                if len(s) == 4 and s.isdigit():
+                    counts = sorted(Counter(s).values(), reverse=True)
+                    if counts == [1, 1, 1, 1]:
+                        patterns["Single (24-Way)"] += 1
+                    elif counts == [2, 1, 1]:
+                        patterns["Double (12-Way)"] += 1
+                    elif counts == [2, 2]:
+                        patterns["Double-Double (6-Way)"] += 1
+                    elif counts == [3, 1]:
+                        patterns["Triple (4-Way)"] += 1
+                    elif counts == [4]:
+                        patterns["Quad (1-Way)"] += 1
+    else:
+        patterns = Counter({
+            "Single (24-Way)": 60,
+            "Double (12-Way)": 30,
+            "Double-Double (6-Way)": 5,
+            "Triple (4-Way)": 4,
+            "Quad (1-Way)": 1
+        })
+    return patterns
+
+def monte_carlo_4d(df_4d, count=5, iterations=5000):
+    """
+    Monte Carlo simulator for 4D digits using position-wise digit probabilities.
+    """
+    freq_matrix = analyze_4d_digit_frequencies(df_4d)
+    digits = [str(i) for i in range(10)]
+    
+    weights_d1 = [freq_matrix['D1'].get(d, 0) + 1 for d in digits]
+    weights_d2 = [freq_matrix['D2'].get(d, 0) + 1 for d in digits]
+    weights_d3 = [freq_matrix['D3'].get(d, 0) + 1 for d in digits]
+    weights_d4 = [freq_matrix['D4'].get(d, 0) + 1 for d in digits]
+    
+    simulations = []
+    for _ in range(iterations):
+        d1 = random.choices(digits, weights=weights_d1, k=1)[0]
+        d2 = random.choices(digits, weights=weights_d2, k=1)[0]
+        d3 = random.choices(digits, weights=weights_d3, k=1)[0]
+        d4 = random.choices(digits, weights=weights_d4, k=1)[0]
+        simulations.append(f"{d1}{d2}{d3}{d4}")
+        
+    top_candidates = [num for num, _ in Counter(simulations).most_common(count)]
+    return top_candidates
+
+def hot_due_4d(df_4d, count=5):
+    """
+    Generates 4D candidates by pairing hot positional digits with long-due positional digits.
+    """
+    freq_matrix = analyze_4d_digit_frequencies(df_4d)
+    digits = [str(i) for i in range(10)]
+    
+    candidates = []
+    for _ in range(count * 3):
+        res = []
+        for pos in ['D1', 'D2', 'D3', 'D4']:
+            # Pick either hot or random top digit for position
+            top_digits = [d for d, _ in freq_matrix[pos].most_common(4)]
+            res.append(random.choice(top_digits) if top_digits else str(random.randint(0, 9)))
+        cand = "".join(res)
+        if cand not in candidates:
+            candidates.append(cand)
+        if len(candidates) >= count:
+            break
+            
+    # Fallback if needed
+    while len(candidates) < count:
+        candidates.append(format_4d(random.randint(0, 9999)))
+        
+    return candidates[:count]

@@ -11,9 +11,92 @@ import wheeling
 import filters
 import ml_model
 import toto4d_studio
+import ticket_tracker
 from datetime import datetime
 
 st.set_page_config(page_title="Sports Toto Analytics & Prediction Studio", layout="wide", page_icon="🎰")
+
+# Inject Custom CSS for Modern Dark Glassmorphic Aesthetic & Lottery Balls
+st.markdown("""
+<style>
+    /* Dark Theme Accent Polish */
+    .stApp {
+        background-color: #0d1117;
+        color: #c9d1d9;
+    }
+    
+    /* 3D Visual Lottery Balls */
+    .lotto-ball {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 38px;
+        height: 38px;
+        border-radius: 50%;
+        background: radial-gradient(circle at 30% 30%, #3a7bd5, #00d2ff);
+        color: #ffffff;
+        font-weight: 800;
+        font-size: 15px;
+        box-shadow: 0 4px 10px rgba(0,210,255,0.35), inset -2px -2px 6px rgba(0,0,0,0.5);
+        text-shadow: 0 1px 2px rgba(0,0,0,0.6);
+        margin-right: 4px;
+    }
+    .bonus-ball {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 38px;
+        height: 38px;
+        border-radius: 50%;
+        background: radial-gradient(circle at 30% 30%, #ff9800, #ff5722);
+        color: #ffffff;
+        font-weight: 800;
+        font-size: 15px;
+        box-shadow: 0 4px 10px rgba(255,87,34,0.45), inset -2px -2px 6px rgba(0,0,0,0.5);
+        text-shadow: 0 1px 2px rgba(0,0,0,0.6);
+        margin-left: 4px;
+    }
+    .badge-4d {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 6px 14px;
+        border-radius: 8px;
+        background: linear-gradient(135deg, #8e2de2, #4a00e0);
+        color: #ffffff;
+        font-weight: 800;
+        font-size: 18px;
+        letter-spacing: 2px;
+        box-shadow: 0 4px 12px rgba(142,45,226,0.35);
+    }
+    
+    /* Glassmorphic Container Cards */
+    .glass-card {
+        background: rgba(22, 27, 34, 0.75);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 12px;
+        padding: 16px;
+        margin-bottom: 12px;
+        backdrop-filter: blur(10px);
+    }
+    
+    /* Sidebar Styling */
+    section[data-testid="stSidebar"] {
+        background-color: #161b22;
+        border-right: 1px solid rgba(255, 255, 255, 0.08);
+    }
+</style>
+""", unsafe_allow_html=True)
+
+def render_lotto_balls_html(numbers, bonus=None):
+    balls_html = '<div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-top: 4px; margin-bottom: 6px;">'
+    for n in numbers:
+        balls_html += f'<span class="lotto-ball">{n:02d}</span>'
+    if bonus is not None:
+        balls_html += '<span style="font-weight: bold; color: #ffca28; margin: 0 4px; font-size: 18px;">+</span>'
+        balls_html += f'<span class="bonus-ball">{bonus:02d}</span>'
+    balls_html += '</div>'
+    return balls_html
 
 # Automatic data update on startup
 @st.cache_resource
@@ -23,14 +106,18 @@ def startup_update():
 
 startup_update()
 
-# Sidebar
+# Sidebar - Modernized Visual Layout
 st.sidebar.title("🎰 Global Controls")
-game_selection = st.sidebar.selectbox("Select Game", ["6/50", "6/55", "6/58"])
+
+game_selection = st.sidebar.selectbox("🎯 Select Active Game", ["6/50", "6/55", "6/58"])
 game_ranges = {"6/50": 50, "6/55": 55, "6/58": 58}
 game_range = game_ranges[game_selection]
 
+game_icons = {"6/50": "⭐ Star Toto 6/50", "6/55": "⚡ Power Toto 6/55", "6/58": "👑 Supreme Toto 6/58"}
+st.sidebar.caption(f"Active Mode: **{game_icons[game_selection]}**")
+
 # Data Loading
-@st.cache_data(show_spinner="Loading data...")
+@st.cache_data(show_spinner="Loading draw data...")
 def get_data(game):
     return data_manager.load_data(game)
 
@@ -46,17 +133,21 @@ def get_zip_data(url):
 def load_live_jackpots():
     return data_manager.get_live_jackpots()
 
-if st.sidebar.button("🔄 Update Data Daily"):
+if st.sidebar.button("🔄 Update Data Daily", use_container_width=True):
     data_manager.download_and_extract()
     st.cache_data.clear()
-    st.sidebar.success("Data updated!")
+    st.sidebar.success("Data successfully updated!")
 
 df_all = get_data(game_selection)
 df_4d = get_4d_data()
 
 # Display Latest Draw Date
 latest_date = df_all['DrawDate'].max()
-st.sidebar.info(f"📅 Latest Draw Date: {latest_date.strftime('%Y-%m-%d')}")
+st.sidebar.info(f"📅 Latest Draw Date: **{latest_date.strftime('%Y-%m-%d')}**")
+
+# Sidebar Saved Tracker Widget
+saved_tickets_list = ticket_tracker.load_tracker_data()
+st.sidebar.markdown(f"📜 **Saved Tracker:** `{len(saved_tickets_list)} Tickets Active`")
 
 # Live Jackpot & EV Alert Widget
 st.sidebar.subheader("💰 Live Estimated Jackpots")
@@ -82,28 +173,15 @@ if ev_val > 2.0:
 else:
     st.sidebar.caption("🔴 Negative EV (Jackpot building...)")
 
-# Download buttons
-st.sidebar.subheader("📥 Download Source Data")
-for game, url in data_manager.URLS.items():
-    zip_content = get_zip_data(url)
-    if zip_content:
-        st.sidebar.download_button(
-            label=f"Download {game} Zip",
-            data=zip_content,
-            file_name=f"Toto{game.replace('/', '')}.zip",
-            mime="application/zip"
-        )
-
 # Filters
 st.sidebar.subheader("🔍 Date & Timeframe Filters")
 
 timeframe_presets = ["All Time", "10 Years", "5 Years", "3 Years", "1 Year", "6 Months", "3 Months"]
 selected_timeframe = st.sidebar.selectbox("⚡ Quick Timeframe Preset", timeframe_presets, index=0, key=f"timeframe_{game_selection}")
 
-# Apply timeframe preset first
 df = analytics.filter_by_timeframe(df_all, selected_timeframe)
 
-# Additional date fine-tuning
+# Streamlined Expanders in Sidebar
 with st.sidebar.expander("⚙️ Fine-Tune Date Filters"):
     years = sorted(df_all['DrawDate'].dt.year.unique(), reverse=True)
     selected_year = st.selectbox("Year", ["All"] + list(years), key=f"year_{game_selection}")
@@ -127,6 +205,17 @@ if not df.empty:
     max_date_str = df['DrawDate'].max().strftime('%Y-%m-%d')
     st.sidebar.caption(f"📊 **Active Data:** `{len(df)} draws`\n📅 `{min_date_str}` to `{max_date_str}`")
 
+with st.sidebar.expander("📥 Download Source Data"):
+    for game, url in data_manager.URLS.items():
+        zip_content = get_zip_data(url)
+        if zip_content:
+            st.download_button(
+                label=f"Download {game} Zip",
+                data=zip_content,
+                file_name=f"Toto{game.replace('/', '')}.zip",
+                mime="application/zip",
+                use_container_width=True
+            )
 
 # Train ML Evaluator once per session/game
 @st.cache_resource
@@ -136,14 +225,15 @@ def get_ml_model(game):
 
 trained_ml = get_ml_model(game_selection)
 
-# Tabs
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+# Tabs Navigation
+tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
     "📊 Insights & Stats", 
     "🔮 Predictor Studio", 
     "🎡 Combinatorial Wheeling", 
-    "🏆 Master Summary", 
-    "🧪 Backtesting & Probability Lab",
-    "🎯 4D & Toto 4D Jackpot Studio"
+    "🎯 4D & Toto 4D Studio",
+    "📜 Tracker & History Compare",
+    "🧪 Backtesting & Lab",
+    "🏆 Master Summary"
 ])
 
 # ----------------- TAB 1: Insights & Stats -----------------
@@ -201,7 +291,7 @@ with tab1:
 # ----------------- TAB 2: Predictor Studio -----------------
 with tab2:
     st.header("🔮 Predictor Studio")
-    st.caption("Generate optimized ticket combinations using statistical, ensemble, and anti-popularity strategies.")
+    st.caption("Generate candidate ticket sets using statistical, ensemble, and anti-popularity strategies.")
     
     col_m1, col_m2 = st.columns([2, 1])
     with col_m1:
@@ -227,14 +317,13 @@ with tab2:
         with f_col3:
             enforce_sum_filter = st.checkbox("Enforce Bell-Curve Sum Range", value=True)
 
-    # Most recent draw for repeat filtering
     last_draw_nums = None
     if not df.empty:
         last_row = df.iloc[0]
         main_cols = ['DrawnNo1', 'DrawnNo2', 'DrawnNo3', 'DrawnNo4', 'DrawnNo5', 'DrawnNo6']
         last_draw_nums = [last_row[c] for c in main_cols if c in last_row]
 
-    if st.button("🚀 Generate Candidate Ticket Sets", type="primary"):
+    if st.button("🚀 Generate Candidate Ticket Sets", type="primary", use_container_width=True):
         sets_to_display = []
         
         if model_choice == "Anti-Popularity / Solo Jackpot Strategy":
@@ -242,13 +331,9 @@ with tab2:
         elif model_choice == "Monte Carlo Simulation":
             raw_sets = predictor.monte_carlo_simulation(df, game_range)
             sets_to_display = filters.filter_tickets(
-                raw_sets, 
-                game_range=game_range, 
-                max_bday=max_bday_filter,
-                sum_filter=enforce_sum_filter,
-                max_consecutive=max_consec_filter,
-                max_repeat=max_repeat_filter,
-                last_draw=last_draw_nums
+                raw_sets, game_range=game_range, max_bday=max_bday_filter,
+                sum_filter=enforce_sum_filter, max_consecutive=max_consec_filter,
+                max_repeat=max_repeat_filter, last_draw=last_draw_nums
             )
             if not sets_to_display: sets_to_display = raw_sets
         elif model_choice == "Mean Reversion (Due)":
@@ -260,57 +345,62 @@ with tab2:
         else: # Hybrid
             raw_sets = [predictor.hybrid_ensemble(df, game_range) for _ in range(10)]
             sets_to_display = filters.filter_tickets(
-                raw_sets,
-                game_range=game_range,
-                max_bday=max_bday_filter,
-                sum_filter=enforce_sum_filter,
-                max_consecutive=max_consec_filter,
-                max_repeat=max_repeat_filter,
-                last_draw=last_draw_nums
+                raw_sets, game_range=game_range, max_bday=max_bday_filter,
+                sum_filter=enforce_sum_filter, max_consecutive=max_consec_filter,
+                max_repeat=max_repeat_filter, last_draw=last_draw_nums
             )
             if not sets_to_display: sets_to_display = raw_sets[:5]
 
+        st.session_state['generated_lotto_sets'] = sets_to_display
+
+    if 'generated_lotto_sets' in st.session_state:
         st.subheader("🎯 Recommended Candidate Ticket Sets")
-        
+        sets_to_display = st.session_state['generated_lotto_sets']
         export_rows = []
+        
         for i, ticket in enumerate(sets_to_display[:5]):
             analysis = filters.analyze_ticket_entropy(ticket, game_range, last_draw=last_draw_nums)
             ml_score = ml_model.predict_ticket_ml_score(trained_ml, ticket, game_range)
             
-            bonus_str = ""
+            b_num = None
             if game_selection == "6/50":
                 b_num = predictor.predict_bonus_number(df, game_range, model_choice)
-                bonus_str = f" | Bonus: **{b_num}**"
+
+            col_t1, col_t2, col_t3, col_t4 = st.columns([3, 1, 1, 1])
+            with col_t1:
+                st.markdown(f"**Ticket Set #{i+1}**")
+                st.markdown(render_lotto_balls_html(ticket, b_num), unsafe_allow_html=True)
+            with col_t2:
+                st.metric("Solo Jackpot", f"{analysis['solo_jackpot_score']}/100")
+            with col_t3:
+                st.metric("ML Score", f"{ml_score}%")
+            with col_t4:
+                save_key = f"save_lotto_{game_selection}_{i}_{ticket[0]}"
+                if st.button("💾 Save to Tracker", key=save_key):
+                    ticket_tracker.add_ticket(
+                        game_type=game_selection,
+                        numbers=ticket,
+                        bonus=b_num,
+                        strategy=f"Predictor Studio ({model_choice})",
+                        notes=f"Solo Score: {analysis['solo_jackpot_score']}, ML: {ml_score}%",
+                        play_type="Lotto"
+                    )
+                    st.success("Saved!")
+                    st.rerun()
 
             formatted_set = ", ".join(f"{n:02d}" for n in ticket)
-            
-            col_t1, col_t2, col_t3 = st.columns([3, 1, 1])
-            with col_t1:
-                st.markdown(f"**Ticket Set {i+1}:** `[ {formatted_set} ]`{bonus_str}")
-            with col_t2:
-                st.metric("Solo Jackpot Score", f"{analysis['solo_jackpot_score']}/100")
-            with col_t3:
-                st.metric("ML Pattern Score", f"{ml_score}%")
-            
             export_rows.append({
-                "Set": i+1,
-                "Numbers": formatted_set,
+                "Set": i+1, "Numbers": formatted_set,
                 "Solo_Jackpot_Score": analysis['solo_jackpot_score'],
-                "ML_Pattern_Score": f"{ml_score}%",
-                "Sum": analysis['sum'],
-                "Birthday_Nums_Count": analysis['bday_count'],
-                "Prime_Nums_Count": analysis['prime_count'],
-                "Last_Draw_Repeats": analysis['repeat_count']
+                "ML_Pattern_Score": f"{ml_score}%", "Sum": analysis['sum']
             })
             st.divider()
 
-        # Ticket Slip Exporter
         if export_rows:
             exp_df = pd.DataFrame(export_rows)
-            csv_data = exp_df.to_csv(index=False)
             st.download_button(
                 label="📥 Export Ticket Slips to CSV",
-                data=csv_data,
+                data=exp_df.to_csv(index=False),
                 file_name=f"Toto_{game_selection.replace('/', '')}_Tickets.csv",
                 mime="text/csv"
             )
@@ -319,24 +409,23 @@ with tab2:
 with tab3:
     st.header("🎡 Combinatorial Wheeling Studio")
     st.markdown("""
-    **Combinatorial Wheeling** allows you to pick a pool of candidate numbers (e.g. 8 to 16 numbers) and automatically 
-    generates an abbreviated wheel or banker wheel that guarantees prize coverage while cutting total ticket costs by **up to 80%**!
+    **Combinatorial Wheeling** lets you select a candidate pool of numbers (e.g. 8 to 16 numbers) and automatically 
+    generates an abbreviated wheel or banker wheel that guarantees prize coverage while cutting ticket costs by **up to 80%**!
     """)
     
     col_w1, col_w2 = st.columns([2, 1])
     with col_w1:
-        # Default pool selection using hot numbers
         freq_dict = analytics.get_frequency(df, lookback=100)
         top_hot = [n for n, c in freq_dict.most_common(14)]
         
         pool_selection = st.multiselect(
-            "Select Your Pool of Candidate Numbers (8 to 16 numbers recommended):",
+            "Select Candidate Number Pool (8 to 16 numbers recommended):",
             options=list(range(1, game_range + 1)),
             default=sorted(top_hot[:10])
         )
         
         banker_selection = st.multiselect(
-            "📌 Select Banker / Key Numbers (Must appear in EVERY ticket slip):",
+            "📌 Select Banker / Key Numbers (Must appear in EVERY ticket):",
             options=pool_selection,
             default=[]
         )
@@ -381,7 +470,7 @@ with tab3:
         m_col1.metric("Pool Size", f"{summary['pool_size']} Numbers")
         m_col2.metric("Tickets Generated", f"{summary['total_tickets']} Tickets")
         m_col3.metric("Total Investment", f"RM {summary['total_cost_rm']:.2f}")
-        m_col4.metric("Cost Savings vs Full Wheel", f"{summary['savings_percentage']:.1f}%")
+        m_col4.metric("Savings vs Full", f"{summary['savings_percentage']:.1f}%")
         
         if banker_selection:
             st.info(f"📌 **Banker Numbers Locked:** `{', '.join(map(str, banker_selection))}` (Included in all {summary['total_tickets']} tickets)")
@@ -389,8 +478,23 @@ with tab3:
         st.subheader("🎟️ Generated Ticket Slips")
         wheel_export = []
         for idx, t in enumerate(wheeled_tickets):
+            col_wh1, col_wh2 = st.columns([4, 1])
+            with col_wh1:
+                st.markdown(f"**Ticket #{idx+1:02d}**")
+                st.markdown(render_lotto_balls_html(t), unsafe_allow_html=True)
+            with col_wh2:
+                if st.button("💾 Save Ticket", key=f"save_wheel_{idx}_{t[0]}"):
+                    ticket_tracker.add_ticket(
+                        game_type=game_selection,
+                        numbers=t,
+                        strategy=f"Wheeling Studio ({wheel_type})",
+                        notes=f"Pool Size: {len(pool_selection)}",
+                        play_type="Lotto"
+                    )
+                    st.success("Saved!")
+                    st.rerun()
+
             formatted_t = ", ".join(f"{n:02d}" for n in t)
-            st.code(f"Ticket #{idx+1:02d}:  [ {formatted_t} ]", language="text")
             wheel_export.append({"Ticket": idx+1, "Numbers": formatted_t})
             
         wheel_df = pd.DataFrame(wheel_export)
@@ -401,58 +505,288 @@ with tab3:
             mime="text/csv"
         )
 
-# ----------------- TAB 4: Master Summary -----------------
+# ----------------- TAB 4: 4D & Sports Toto 4D Studio -----------------
 with tab4:
-    st.header("🏆 Master Summary")
-    summary_model = st.selectbox("Select Strategy for Master Summary", ["Anti-Popularity / Solo Jackpot Strategy", "Markov Chain Analysis", "Monte Carlo Simulation", "Mean Reversion (Due)", "Hybrid/Ensemble Model"], index=0)
-    st.write(f"Top predictions for all Sports Toto games based on **{summary_model}**")
+    st.header("🎯 4D & Sports Toto 4D Studio")
+    st.markdown("""
+    Analyze **4D position digit distributions**, digit patterns (Single, Double, Triple, Quad), generate **Box Play / i-Perm** permutations,
+    wheel **System 4D Jackpot pairs**, and run **Dedicated 4D Predictors**!
+    """)
     
-    for g in ["6/50", "6/55", "6/58"]:
-        g_df = get_data(g)
-        g_range = game_ranges[g]
-        g_ml = get_ml_model(g)
+    sec_a, sec_b, sec_c = st.tabs(["📊 4D Digit Analytics", "🔮 4D Predictors & Generators", "🎲 Box Play & Jackpot Pair Wheels"])
+    
+    with sec_a:
+        st.subheader("📈 Position-Wise Digit Frequency (D1, D2, D3, D4)")
+        freq_matrix = toto4d_studio.analyze_4d_digit_frequencies(df_4d)
+        
+        col_d1, col_d2 = st.columns(2)
+        with col_d1:
+            df_d1_d2 = pd.DataFrame({
+                'Digit': [str(i) for i in range(10)],
+                'D1 (1st Digit)': [freq_matrix['D1'][str(i)] for i in range(10)],
+                'D2 (2nd Digit)': [freq_matrix['D2'][str(i)] for i in range(10)]
+            })
+            fig_pos1 = px.bar(df_d1_d2, x='Digit', y=['D1 (1st Digit)', 'D2 (2nd Digit)'], barmode='group', title="D1 & D2 Digit Distribution")
+            st.plotly_chart(fig_pos1, use_container_width=True)
+            
+        with col_d2:
+            df_d3_d4 = pd.DataFrame({
+                'Digit': [str(i) for i in range(10)],
+                'D3 (3rd Digit)': [freq_matrix['D3'][str(i)] for i in range(10)],
+                'D4 (4th Digit)': [freq_matrix['D4'][str(i)] for i in range(10)]
+            })
+            fig_pos2 = px.bar(df_d3_d4, x='Digit', y=['D3 (3rd Digit)', 'D4 (4th Digit)'], barmode='group', title="D3 & D4 Digit Distribution")
+            st.plotly_chart(fig_pos2, use_container_width=True)
 
-        if summary_model == "Anti-Popularity / Solo Jackpot Strategy":
-            pred = predictor.anti_popularity_model(g_df, g_range, count=1)[0]
-        elif summary_model == "Markov Chain Analysis":
-            pred = predictor.markov_chain_analysis(g_df, g_range)
-        elif summary_model == "Monte Carlo Simulation":
-            pred = predictor.monte_carlo_simulation(g_df, g_range)[0]
-        elif summary_model == "Mean Reversion (Due)":
-            pred = predictor.mean_reversion_due(g_df, g_range)
-        else:
-            pred = predictor.hybrid_ensemble(g_df, g_range)
+        st.subheader("🧩 Historical 4D Digit Structure Pattern Distribution")
+        pattern_counts = toto4d_studio.analyze_4d_patterns(df_4d)
+        fig_pat = px.pie(values=list(pattern_counts.values()), names=list(pattern_counts.keys()), title="4D Digit Pattern Breakdown", hole=0.4)
+        st.plotly_chart(fig_pat, use_container_width=True)
 
-        bonus_str = ""
-        if g == "6/50":
-            bonus = predictor.predict_bonus_number(g_df, g_range, summary_model)
-            bonus_str = f" | Bonus: **{bonus}**"
+    with sec_b:
+        st.subheader("🔮 Dedicated 4D Prediction Algorithms")
+        c_pred1, c_pred2 = st.columns(2)
+        
+        with c_pred1:
+            st.markdown("#### 🎲 Positional Monte Carlo 4D Generator")
+            if st.button("Generate Monte Carlo 4D Sets"):
+                mc_4d = toto4d_studio.monte_carlo_4d(df_4d, count=5)
+                st.session_state['mc_4d'] = mc_4d
+                
+            if 'mc_4d' in st.session_state:
+                for idx, num in enumerate(st.session_state['mc_4d']):
+                    c1, c2 = st.columns([3, 1])
+                    with c1:
+                        st.markdown(f"**Candidate #{idx+1}:** <span class='badge-4d'>{num}</span>", unsafe_allow_html=True)
+                    with c2:
+                        if st.button("💾 Save", key=f"save_mc4d_{idx}_{num}"):
+                            ticket_tracker.add_ticket("4D", numbers=[num], strategy="4D Monte Carlo", play_type="4D")
+                            st.success("Saved!")
+                            st.rerun()
 
-        analysis = filters.analyze_ticket_entropy(pred, g_range)
-        ml_score = ml_model.predict_ticket_ml_score(g_ml, pred, g_range)
-        formatted_pred = ", ".join(f"{n:02d}" for n in pred)
+        with c_pred2:
+            st.markdown("#### ⚡ Hot & Due Positional Digit 4D Generator")
+            if st.button("Generate Hot & Due 4D Sets"):
+                hd_4d = toto4d_studio.hot_due_4d(df_4d, count=5)
+                st.session_state['hd_4d'] = hd_4d
+                
+            if 'hd_4d' in st.session_state:
+                for idx, num in enumerate(st.session_state['hd_4d']):
+                    c1, c2 = st.columns([3, 1])
+                    with c1:
+                        st.markdown(f"**Candidate #{idx+1}:** <span class='badge-4d'>{num}</span>", unsafe_allow_html=True)
+                    with c2:
+                        if st.button("💾 Save", key=f"save_hd4d_{idx}_{num}"):
+                            ticket_tracker.add_ticket("4D", numbers=[num], strategy="4D Hot & Due", play_type="4D")
+                            st.success("Saved!")
+                            st.rerun()
 
-        st.subheader(f"🎮 Game {g}")
-        c1, c2, c3 = st.columns([3, 1, 1])
-        with c1:
-            st.markdown(f"**Recommended Set:** `[ {formatted_pred} ]`{bonus_str}")
-        with c2:
-            st.metric("Solo Jackpot Score", f"{analysis['solo_jackpot_score']}/100")
-        with c3:
-            st.metric("ML Pattern Score", f"{ml_score}%")
         st.divider()
+        st.subheader("🛡️ Anti-Popularity / Unshared 4D Candidate Generator")
+        if st.button("🎲 Generate Unshared 4D Candidates"):
+            anti_4d = toto4d_studio.generate_anti_popularity_4d(count=10)
+            st.session_state['anti_4d'] = anti_4d
 
-# ----------------- TAB 5: Backtesting & Probability Lab -----------------
+        if 'anti_4d' in st.session_state:
+            cols_ap = st.columns(5)
+            for idx, num in enumerate(st.session_state['anti_4d']):
+                with cols_ap[idx % 5]:
+                    st.markdown(f"<span class='badge-4d'>{num}</span>", unsafe_allow_html=True)
+                    if st.button("💾 Save", key=f"save_anti4d_{idx}_{num}"):
+                        ticket_tracker.add_ticket("4D", numbers=[num], strategy="Anti-Popularity 4D", play_type="4D")
+                        st.success("Saved!")
+                        st.rerun()
+
+    with sec_c:
+        sub_c1, sub_c2 = st.columns(2)
+        
+        with sub_c1:
+            st.subheader("📦 Box Play / i-Perm Permutation Wheel")
+            input_4d = st.text_input("Enter a 4-Digit Number (e.g. 1234 or 8812):", value="1234")
+            
+            if st.button("Generate 4D Permutations"):
+                perms, label, cost = toto4d_studio.generate_4d_permutations(input_4d)
+                st.success(f"**Permutation Type:** `{label}` | **Total Permutations:** `{len(perms)}`")
+                st.metric("Total Investment (Standard RM 1/perm)", f"RM {cost:.2f}")
+                
+                st.write("Generated Permutation Slips:")
+                st.code(", ".join(perms), language="text")
+                
+                if st.button("💾 Save All Permutations to Tracker"):
+                    for p in perms:
+                        ticket_tracker.add_ticket("4D", numbers=[p], strategy=f"Box Play ({label})", play_type="4D")
+                    st.success("All permutations saved!")
+                    st.rerun()
+                
+        with sub_c2:
+            st.subheader("💰 System 4D Jackpot Pair Generator")
+            st.caption("Select a pool of 4D numbers to generate all 2-pair combinations for Toto 4D Jackpot 1/2.")
+            
+            pool_input = st.text_area(
+                "Enter Pool of 4D Numbers (separated by commas or newlines):",
+                value="1234, 5678, 8888, 0168, 9999"
+            )
+            
+            if st.button("🚀 Generate 4D Jackpot Pairs", type="primary"):
+                nums = [n.strip() for n in pool_input.replace('\n', ',').split(',') if n.strip()]
+                pairs, num_pairs, total_cost = toto4d_studio.generate_system_4d_jackpot(nums)
+                st.session_state['jp_pairs'] = pairs
+                st.session_state['jp_cost'] = total_cost
+                
+            if 'jp_pairs' in st.session_state:
+                pairs = st.session_state['jp_pairs']
+                total_cost = st.session_state['jp_cost']
+                st.success(f"**Jackpot Pairs Generated:** {len(pairs)}")
+                st.metric("Total Ticket Investment (RM 2/pair)", f"RM {total_cost:.2f}")
+                
+                for idx, (p1, p2) in enumerate(pairs):
+                    c1, c2 = st.columns([3, 1])
+                    with c1:
+                        st.markdown(f"**Pair #{idx+1:02d}:** <span class='badge-4d'>{p1}</span> + <span class='badge-4d'>{p2}</span>", unsafe_allow_html=True)
+                    with c2:
+                        if st.button("💾 Save Pair", key=f"save_jppair_{idx}_{p1}_{p2}"):
+                            ticket_tracker.add_ticket("4D Jackpot", numbers=[p1, p2], strategy="System 4D Jackpot", play_type="4D Jackpot")
+                            st.success("Saved!")
+                            st.rerun()
+
+# ----------------- TAB 5: Tracker & History Compare -----------------
 with tab5:
+    st.header("📜 Ticket History, Prediction Tracker & Draw Compare")
+    st.caption("View your saved predictions, type custom ticket entries, automatically compare against real draw results, and track P&L!")
+    
+    col_tr1, col_tr2 = st.columns([1, 2])
+    
+    with col_tr1:
+        st.subheader("➕ Save / Type New Selection")
+        input_play_type = st.radio("Play Type", ["Lotto", "4D", "4D Jackpot"], horizontal=True)
+        
+        target_game = "6/50"
+        if input_play_type == "Lotto":
+            target_game = st.selectbox("Game Type", ["6/50", "6/55", "6/58"])
+        elif input_play_type == "4D" or input_play_type == "4D Jackpot":
+            target_game = "4D"
+            
+        manual_notes = st.text_input("Strategy / Tag / Notes", value="My Selection")
+        
+        if input_play_type == "Lotto":
+            raw_input = st.text_area("Enter 6 Lotto Numbers (e.g. 05, 12, 19, 28, 35, 42):", value="05, 12, 19, 28, 35, 42")
+            bonus_input = st.number_input("Bonus Number (Optional for 6/50)", min_value=1, max_value=50, value=7) if target_game == "6/50" else None
+        elif input_play_type == "4D":
+            raw_input = st.text_area("Enter 4-Digit Number (e.g. 1234):", value="1234")
+            bonus_input = None
+        else: # 4D Jackpot
+            raw_input = st.text_area("Enter 2x 4D Numbers for Jackpot Pair (e.g. 1234, 5678):", value="1234, 5678")
+            bonus_input = None
+
+        if st.button("➕ Add Ticket to Tracker", type="primary", use_container_width=True):
+            parsed_nums, err = ticket_tracker.parse_manual_input(raw_input, play_type=input_play_type)
+            if err:
+                st.error(err)
+            else:
+                ticket_tracker.add_ticket(
+                    game_type=target_game,
+                    numbers=parsed_nums,
+                    bonus=bonus_input,
+                    strategy=manual_notes,
+                    play_type=input_play_type
+                )
+                st.success("Ticket saved to persistent memory!")
+                st.rerun()
+
+    with col_tr2:
+        st.subheader("📊 Tracker Summary & Performance")
+        raw_tickets = ticket_tracker.load_tracker_data()
+        
+        # Load dictionary of dataframes for evaluation
+        lotto_dfs = {
+            "6/50": get_data("6/50"),
+            "6/55": get_data("6/55"),
+            "6/58": get_data("6/58")
+        }
+        
+        evaluated_tickets = [
+            ticket_tracker.evaluate_single_ticket(t, df_lotto=lotto_dfs.get(t.get("game_type", "6/50")), df_4d=df_4d)
+            for t in raw_tickets
+        ]
+        
+        summary = ticket_tracker.get_tracker_summary(evaluated_tickets)
+        
+        m_s1, m_s2, m_s3, m_s4 = st.columns(4)
+        m_s1.metric("Total Saved Slips", f"{summary['total_tickets']}")
+        m_s2.metric("Total Investment", f"RM {summary['total_cost']:.2f}")
+        m_s3.metric("Total Prizes Claimed", f"RM {summary['total_prizes']:.2f}")
+        
+        pl_color = "normal" if summary['net_pl'] >= 0 else "inverse"
+        m_s4.metric("Net P&L (ROI)", f"RM {summary['net_pl']:.2f}", delta=f"{summary['roi_pct']:.1f}%", delta_color=pl_color)
+
+    st.divider()
+    st.subheader("📋 Saved Tickets Log & Historical Match Verification")
+    
+    if not evaluated_tickets:
+        st.info("No saved tickets found in tracker. Generate candidate sets in Predictor Studio or type custom numbers above!")
+    else:
+        filter_game = st.selectbox("Filter Log by Game", ["All Games", "6/50", "6/55", "6/58", "4D", "4D Jackpot"])
+        filtered_tickets = evaluated_tickets
+        if filter_game != "All Games":
+            filtered_tickets = [t for t in evaluated_tickets if t.get("game_type") == filter_game or t.get("play_type") == filter_game]
+            
+        for t in filtered_tickets:
+            with st.container():
+                st.markdown("<div class='glass-card'>", unsafe_allow_html=True)
+                c_lk1, c_lk2, c_lk3, c_lk4 = st.columns([3, 2, 2, 1])
+                
+                with c_lk1:
+                    st.markdown(f"**ID:** `{t['id']}` | **Game:** `{t['game_type']}` | **Strategy:** *{t['strategy']}*")
+                    if t['play_type'] == "Lotto":
+                        st.markdown(render_lotto_balls_html(t['numbers'], t.get('bonus')), unsafe_allow_html=True)
+                    else:
+                        nums_html = " + ".join([f"<span class='badge-4d'>{n}</span>" for n in t['numbers']])
+                        st.markdown(nums_html, unsafe_allow_html=True)
+                        
+                with c_lk2:
+                    st.markdown(f"📅 **Added:** `{t['created_at'][:10]}`")
+                    if "evaluated_draw_date" in t:
+                        st.markdown(f"🎯 **Tested Draw Date:** `{t['evaluated_draw_date']}`")
+                        
+                with c_lk3:
+                    st.markdown(f"<span style='background: {t['badge_color']}; color: black; font-weight: bold; padding: 4px 8px; border-radius: 6px;'>{t['badge_label']}</span>", unsafe_allow_html=True)
+                    if t.get('prize', 0) > 0:
+                        st.markdown(f"💰 **Prize Won:** `RM {t['prize']:.2f}`")
+                        
+                with c_lk4:
+                    if st.button("🗑️ Delete", key=f"del_{t['id']}"):
+                        ticket_tracker.delete_ticket(t['id'])
+                        st.rerun()
+                        
+                st.markdown("</div>", unsafe_allow_html=True)
+
+        st.divider()
+        col_act1, col_act2 = st.columns(2)
+        with col_act1:
+            log_df = pd.DataFrame(evaluated_tickets)
+            st.download_button(
+                label="📥 Export Tracker History to CSV",
+                data=log_df.to_csv(index=False),
+                file_name="Sports_Toto_Saved_Tracker_History.csv",
+                mime="text/csv",
+                use_container_width=True
+            )
+        with col_act2:
+            if st.button("⚠️ Clear All Tracker History", type="secondary", use_container_width=True):
+                ticket_tracker.clear_all_tickets()
+                st.success("Tracker cleared.")
+                st.rerun()
+
+# ----------------- TAB 6: Backtesting & Probability Lab -----------------
+with tab6:
     st.header("🧪 Backtesting & Probability Lab")
 
-    # Time-Travel Backtester
     st.subheader("🕰️ Time-Travel Backtester")
     col_bt1, col_bt2 = st.columns([1, 2])
 
     with col_bt1:
         available_dates = df_all['DrawDate'].dt.date.unique()
-        selected_date = st.selectbox("Pick a Historical Draw Date", available_dates)
+        selected_date = st.selectbox("Pick Historical Draw Date", available_dates)
         selected_model = st.selectbox("Model to Backtest", ["Anti-Popularity / Solo Jackpot Strategy", "Markov Chain Analysis", "Monte Carlo Simulation", "Mean Reversion (Due)", "Hybrid/Ensemble Model"])
 
         if st.button("Run Time-Travel Backtest"):
@@ -463,7 +797,7 @@ with tab5:
             historical_df = df_all[df_all['DrawDate'].dt.date < selected_date]
 
             if len(historical_df) < 20:
-                st.warning("Not enough historical data before this date.")
+                st.warning("Not enough historical data prior to selected date.")
             else:
                 if selected_model == "Anti-Popularity / Solo Jackpot Strategy":
                     pred = predictor.anti_popularity_model(historical_df, game_range, count=1)[0]
@@ -489,7 +823,6 @@ with tab5:
                 if hb: st.write("✅ Bonus Match!")
                 st.write(f"Hypothetical Prize: RM {prize}")
 
-    # Model Leaderboard & P&L
     st.divider()
     st.subheader("🏆 Model Leaderboard (Last 100 Draws)")
 
@@ -505,7 +838,6 @@ with tab5:
         lb_df = pd.DataFrame(leaderboard)
         st.table(lb_df[['Model', 'matches_3', 'matches_4', 'matches_5', 'matches_6', 'total_prize', 'ROI (%)']])
 
-    # Expected Value Calculator
     st.divider()
     st.subheader("🎲 Interactive Expected Value (EV) Calculator")
     calc_jackpot = st.slider("Simulated Estimated Jackpot (RM)", min_value=1000000, max_value=60000000, value=int(jackpot_value), step=1000000)
@@ -522,98 +854,58 @@ with tab5:
         else:
             st.error("🔴 Negative EV. Jackpot prize is below the statistical breakeven threshold.")
 
-# ----------------- TAB 6: 4D & Toto 4D Jackpot Studio -----------------
-with tab6:
-    st.header("🎯 4D & Sports Toto 4D Jackpot Studio")
-    st.markdown("""
-    Welcome to the **4D & Toto 4D Jackpot Studio**!
-    Analyze 4D digit distributions, generate **Box Play / i-Perm** permutations, wheel **System 4D Jackpot pairs** ($\sim 1 \text{ in } 16.67\text{M}$ odds), and build **Anti-Popularity 4D sets**.
-    """)
+# ----------------- TAB 7: Master Summary -----------------
+with tab7:
+    st.header("🏆 Master Multi-Game Dashboard")
+    summary_model = st.selectbox("Select Strategy for Master Summary", ["Anti-Popularity / Solo Jackpot Strategy", "Markov Chain Analysis", "Monte Carlo Simulation", "Mean Reversion (Due)", "Hybrid/Ensemble Model"], index=0)
+    st.write(f"Top predictions for all Sports Toto games based on **{summary_model}**")
     
-    sec_a, sec_b = st.tabs(["📊 4D Digit Analytics", "🎲 Permutation & Jackpot Pair Generators"])
-    
-    with sec_a:
-        st.subheader("📈 Position-Wise Digit Frequency (D1, D2, D3, D4)")
-        freq_matrix = toto4d_studio.analyze_4d_digit_frequencies(df_4d)
-        
-        col_d1, col_d2 = st.columns(2)
-        with col_d1:
-            df_d1_d2 = pd.DataFrame({
-                'Digit': [str(i) for i in range(10)],
-                'D1 (1st Digit)': [freq_matrix['D1'][str(i)] for i in range(10)],
-                'D2 (2nd Digit)': [freq_matrix['D2'][str(i)] for i in range(10)]
-            })
-            fig_pos1 = px.bar(df_d1_d2, x='Digit', y=['D1 (1st Digit)', 'D2 (2nd Digit)'], barmode='group', title="Position D1 & D2 Digit Distribution")
-            st.plotly_chart(fig_pos1, use_container_width=True)
-            
-        with col_d2:
-            df_d3_d4 = pd.DataFrame({
-                'Digit': [str(i) for i in range(10)],
-                'D3 (3rd Digit)': [freq_matrix['D3'][str(i)] for i in range(10)],
-                'D4 (4th Digit)': [freq_matrix['D4'][str(i)] for i in range(10)]
-            })
-            fig_pos2 = px.bar(df_d3_d4, x='Digit', y=['D3 (3rd Digit)', 'D4 (4th Digit)'], barmode='group', title="Position D3 & D4 Digit Distribution")
-            st.plotly_chart(fig_pos2, use_container_width=True)
+    for g in ["6/50", "6/55", "6/58"]:
+        g_df = get_data(g)
+        g_range = game_ranges[g]
+        g_ml = get_ml_model(g)
 
-    with sec_b:
-        sub_c1, sub_c2 = st.columns(2)
-        
-        with sub_c1:
-            st.subheader("📦 Box Play / i-Perm Permutation Wheel")
-            input_4d = st.text_input("Enter a 4-Digit Number (e.g. 1234 or 8812):", value="1234")
-            
-            if st.button("Generate 4D Permutations"):
-                perms, label, cost = toto4d_studio.generate_4d_permutations(input_4d)
-                st.success(f"**Permutation Type:** `{label}` | **Total Permutations:** `{len(perms)}`")
-                st.metric("Total Investment (Standard RM 1/perm)", f"RM {cost:.2f}")
-                
-                st.write("Generated Permutation Slips:")
-                st.code(", ".join(perms), language="text")
-                
-        with sub_c2:
-            st.subheader("💰 System 4D Jackpot Pair Generator")
-            st.caption("Select a pool of 4D numbers to generate all 2-pair combinations for Toto 4D Jackpot 1/2.")
-            
-            pool_input = st.text_area(
-                "Enter Pool of 4D Numbers (separated by commas or newlines):",
-                value="1234, 5678, 8888, 0168, 9999"
-            )
-            
-            if st.button("🚀 Generate 4D Jackpot Pairs", type="primary"):
-                nums = [n.strip() for n in pool_input.replace('\n', ',').split(',') if n.strip()]
-                pairs, num_pairs, total_cost = toto4d_studio.generate_system_4d_jackpot(nums)
-                
-                if num_pairs == 0:
-                    st.warning("Please enter at least 2 valid 4D numbers.")
-                else:
-                    st.success(f"**Pool Size:** {len(set(nums))} Numbers | **Jackpot Pairs Generated:** {num_pairs}")
-                    st.metric("Total Ticket Investment (RM 2/pair)", f"RM {total_cost:.2f}")
-                    
-                    jp_export = []
-                    for idx, (p1, p2) in enumerate(pairs):
-                        st.code(f"Pair #{idx+1:02d}:  [ {p1} + {p2} ]", language="text")
-                        jp_export.append({"Pair_ID": idx+1, "Number_1": p1, "Number_2": p2, "Combination": f"{p1} + {p2}"})
-                        
-                    jp_df = pd.DataFrame(jp_export)
-                    st.download_button(
-                        label="📥 Download Printable 4D Jackpot Pairs (CSV)",
-                        data=jp_df.to_csv(index=False),
-                        file_name="Toto_4D_Jackpot_Pairs.csv",
-                        mime="text/csv"
-                    )
+        if summary_model == "Anti-Popularity / Solo Jackpot Strategy":
+            pred = predictor.anti_popularity_model(g_df, g_range, count=1)[0]
+        elif summary_model == "Markov Chain Analysis":
+            pred = predictor.markov_chain_analysis(g_df, g_range)
+        elif summary_model == "Monte Carlo Simulation":
+            pred = predictor.monte_carlo_simulation(g_df, g_range)[0]
+        elif summary_model == "Mean Reversion (Due)":
+            pred = predictor.mean_reversion_due(g_df, g_range)
+        else:
+            pred = predictor.hybrid_ensemble(g_df, g_range)
 
+        bonus_str = ""
+        b_num = None
+        if g == "6/50":
+            b_num = predictor.predict_bonus_number(g_df, g_range, summary_model)
+            bonus_str = f" | Bonus: **{b_num}**"
+
+        analysis = filters.analyze_ticket_entropy(pred, g_range)
+        ml_score = ml_model.predict_ticket_ml_score(g_ml, pred, g_range)
+
+        st.subheader(f"🎮 Game {g}")
+        c1, c2, c3, c4 = st.columns([3, 1, 1, 1])
+        with c1:
+            st.markdown(render_lotto_balls_html(pred, b_num), unsafe_allow_html=True)
+        with c2:
+            st.metric("Solo Jackpot Score", f"{analysis['solo_jackpot_score']}/100")
+        with c3:
+            st.metric("ML Pattern Score", f"{ml_score}%")
+        with c4:
+            if st.button(f"💾 Save {g} Ticket", key=f"save_master_{g}"):
+                ticket_tracker.add_ticket(
+                    game_type=g,
+                    numbers=pred,
+                    bonus=b_num,
+                    strategy=f"Master Summary ({summary_model})",
+                    play_type="Lotto"
+                )
+                st.success("Saved!")
+                st.rerun()
         st.divider()
-        st.subheader("🛡️ Anti-Popularity / Unshared 4D Candidate Generator")
-        if st.button("🎲 Generate Unshared 4D Candidates"):
-            anti_4d = toto4d_studio.generate_anti_popularity_4d(count=10)
-            st.write("Top 10 Anti-Popularity 4D Candidates (Avoids birth years & common sequences):")
-            
-            cols_ap = st.columns(5)
-            for idx, num in enumerate(anti_4d):
-                with cols_ap[idx % 5]:
-                    st.metric(f"Candidate #{idx+1}", num)
 
 # Footer
 st.markdown("---")
 st.markdown("<p style='text-align: center; color: gray;'>🎰 Sports Toto Analytics Studio • For Entertainment & Analytical Purposes Only. Play Responsibly.</p>", unsafe_allow_html=True)
-
