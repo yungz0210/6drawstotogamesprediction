@@ -93,10 +93,18 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-def render_lotto_balls_html(numbers, bonus=None):
+def render_lotto_balls_html(numbers, bonus=None, matched_numbers=None):
+    if matched_numbers is None:
+        matched_numbers = []
+    matched_set = set(matched_numbers)
+    
     balls_html = '<div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-top: 4px; margin-bottom: 6px;">'
     for n in numbers:
-        balls_html += f'<span class="lotto-ball">{n:02d}</span>'
+        if n in matched_set:
+            balls_html += f'<span class="lotto-ball" style="box-shadow: 0 0 14px #00ff88, inset -2px -2px 6px rgba(0,0,0,0.5); border: 2px solid #00ff88;">{n:02d}</span>'
+        else:
+            balls_html += f'<span class="lotto-ball">{n:02d}</span>'
+            
     if bonus is not None:
         balls_html += '<span style="font-weight: bold; color: #ffca28; margin: 0 4px; font-size: 18px;">+</span>'
         balls_html += f'<span class="bonus-ball">{bonus:02d}</span>'
@@ -667,8 +675,75 @@ with tab4:
 # ----------------- TAB 5: Tracker & History Compare -----------------
 with tab5:
     st.header("📜 Ticket History, Prediction Tracker & Draw Compare")
-    st.caption("View your saved predictions, type custom ticket entries, automatically compare against real draw results, and track P&L!")
+    st.caption("View real winning draw results, save/type custom predictions, automatically match against real history, and track P&L!")
     
+    # Load dictionary of dataframes for inspection and evaluation
+    lotto_dfs = {
+        "6/50": get_data("6/50"),
+        "6/55": get_data("6/55"),
+        "6/58": get_data("6/58")
+    }
+
+    # Real Draw Results Explorer Component
+    with st.container():
+        st.markdown("<div class='glass-card'>", unsafe_allow_html=True)
+        st.subheader("🏆 Real Winning Draw Results Explorer")
+        res_game = st.selectbox(
+            "Select Game to Inspect Actual Winning Results:",
+            ["6/50", "6/55", "6/58", "4D"],
+            key="res_game_explorer"
+        )
+        
+        if res_game in ["6/50", "6/55", "6/58"]:
+            g_df = lotto_dfs[res_game]
+            if not g_df.empty:
+                latest_r = g_df.iloc[0]
+                m_cols = ['DrawnNo1', 'DrawnNo2', 'DrawnNo3', 'DrawnNo4', 'DrawnNo5', 'DrawnNo6']
+                latest_nums = sorted([int(latest_r[c]) for c in m_cols])
+                latest_b = int(latest_r['BonusNo']) if 'BonusNo' in latest_r and pd.notna(latest_r['BonusNo']) else None
+                latest_dt = latest_r['DrawDate'].strftime('%Y-%m-%d')
+                draw_no = latest_r.get('DrawNo', 'N/A')
+                
+                c_res1, c_res2 = st.columns([3, 2])
+                with c_res1:
+                    st.markdown(f"#### 🌟 Latest Draw Result for **{res_game}** (Draw #{draw_no} • {latest_dt})")
+                    st.markdown(render_lotto_balls_html(latest_nums, latest_b), unsafe_allow_html=True)
+                with c_res2:
+                    st.caption("📊 Draw Summary")
+                    st.write(f"Sum Total: `{sum(latest_nums)}` | Odd/Even: `{sum(1 for n in latest_nums if n%2!=0)}:{sum(1 for n in latest_nums if n%2==0)}`")
+                
+                with st.expander(f"📅 Browse All Historical Draw Results for {res_game} ({len(g_df)} draws)"):
+                    sel_hist_date = st.selectbox("Pick a Historical Draw Date to Inspect:", options=g_df['DrawDate'].dt.strftime('%Y-%m-%d').tolist(), key=f"hist_date_{res_game}")
+                    hist_row = g_df[g_df['DrawDate'].dt.strftime('%Y-%m-%d') == sel_hist_date].iloc[0]
+                    h_nums = sorted([int(hist_row[c]) for c in m_cols])
+                    h_b = int(hist_row['BonusNo']) if 'BonusNo' in hist_row and pd.notna(hist_row['BonusNo']) else None
+                    h_no = hist_row.get('DrawNo', 'N/A')
+                    st.markdown(f"**Draw #{h_no} Date:** `{sel_hist_date}`")
+                    st.markdown(render_lotto_balls_html(h_nums, h_b), unsafe_allow_html=True)
+                    st.dataframe(g_df, use_container_width=True)
+
+        else: # 4D
+            if not df_4d.empty:
+                latest_4d = df_4d.iloc[0]
+                dt_4d = pd.to_datetime(latest_4d['DrawDate']).strftime('%Y-%m-%d')
+                p1 = str(latest_4d.get('1stPrize', '')).zfill(4)[-4:]
+                p2 = str(latest_4d.get('2ndPrize', '')).zfill(4)[-4:]
+                p3 = str(latest_4d.get('3rdPrize', '')).zfill(4)[-4:]
+                
+                st.markdown(f"#### 🌟 Latest 4D Draw Result ({dt_4d})")
+                c_p1, c_p2, c_p3 = st.columns(3)
+                with c_p1:
+                    st.markdown(f"**🥇 1st Prize:** <span class='badge-4d'>{p1}</span>", unsafe_allow_html=True)
+                with c_p2:
+                    st.markdown(f"**🥈 2nd Prize:** <span class='badge-4d'>{p2}</span>", unsafe_allow_html=True)
+                with c_p3:
+                    st.markdown(f"**🥉 3rd Prize:** <span class='badge-4d'>{p3}</span>", unsafe_allow_html=True)
+                    
+                with st.expander("📅 Browse Historical 4D Results & Full Prize List"):
+                    st.dataframe(df_4d, use_container_width=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+        
+    st.divider()
     col_tr1, col_tr2 = st.columns([1, 2])
     
     with col_tr1:
@@ -753,7 +828,7 @@ with tab5:
                 with c_lk1:
                     st.markdown(f"**ID:** `{t['id']}` | **Game:** `{t['game_type']}` | **Strategy:** *{t['strategy']}*")
                     if t['play_type'] == "Lotto":
-                        st.markdown(render_lotto_balls_html(t['numbers'], t.get('bonus')), unsafe_allow_html=True)
+                        st.markdown(render_lotto_balls_html(t['numbers'], t.get('bonus'), t.get('matched_numbers')), unsafe_allow_html=True)
                     else:
                         nums_html = " + ".join([f"<span class='badge-4d'>{n}</span>" for n in t['numbers']])
                         st.markdown(nums_html, unsafe_allow_html=True)
@@ -761,7 +836,15 @@ with tab5:
                 with c_lk2:
                     st.markdown(f"📅 **Added:** `{t['created_at'][:10]}`")
                     if "evaluated_draw_date" in t:
-                        st.markdown(f"🎯 **Tested Draw Date:** `{t['evaluated_draw_date']}`")
+                        st.markdown(f"🎯 **Draw Date:** `{t['evaluated_draw_date']}`")
+                        
+                    if "actual_winning_numbers" in t:
+                        win_str = ", ".join(f"{n:02d}" for n in t["actual_winning_numbers"])
+                        b_str = f" | Bonus: {t['actual_bonus']:02d}" if t.get("actual_bonus") is not None else ""
+                        st.markdown(f"🏆 **Winning Result:**\n`[ {win_str} ]{b_str}`")
+                    elif "actual_top3_4d" in t:
+                        top3 = t["actual_top3_4d"]
+                        st.markdown(f"🏆 **Top 3 4D:**\n`1st: {top3['1st']} | 2nd: {top3['2nd']} | 3rd: {top3['3rd']}`")
                         
                 with c_lk3:
                     st.markdown(f"<span style='background: {t['badge_color']}; color: black; font-weight: bold; padding: 4px 8px; border-radius: 6px;'>{t['badge_label']}</span>", unsafe_allow_html=True)

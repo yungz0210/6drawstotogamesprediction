@@ -167,10 +167,13 @@ def evaluate_single_ticket(ticket, df_lotto=None, df_4d=None):
         res["evaluated_draw_date"] = actual_draw_date
         
         main_cols = ['DrawnNo1', 'DrawnNo2', 'DrawnNo3', 'DrawnNo4', 'DrawnNo5', 'DrawnNo6']
-        actual_set = set(latest_row[main_cols].values)
+        actual_draw_list = sorted([int(latest_row[c]) for c in main_cols])
+        actual_set = set(actual_draw_list)
         user_set = set(numbers)
         matched = sorted(list(user_set.intersection(actual_set)))
         
+        res["actual_winning_numbers"] = actual_draw_list
+        res["actual_bonus"] = int(latest_row['BonusNo']) if 'BonusNo' in latest_row and pd.notna(latest_row['BonusNo']) else None
         res["matches"] = len(matched)
         res["matched_numbers"] = matched
         
@@ -216,6 +219,8 @@ def evaluate_single_ticket(ticket, df_lotto=None, df_4d=None):
         p1 = str(latest_row.get('1stPrize', '')).zfill(4)[-4:]
         p2 = str(latest_row.get('2ndPrize', '')).zfill(4)[-4:]
         p3 = str(latest_row.get('3rdPrize', '')).zfill(4)[-4:]
+        
+        res["actual_top3_4d"] = {"1st": p1, "2nd": p2, "3rd": p3}
         
         top3_set = {p1, p2, p3}
         
