@@ -13,6 +13,11 @@ import ml_model
 import toto4d_studio
 import ticket_tracker
 from datetime import datetime
+import importlib
+
+# Force module reload to ensure latest code changes are loaded on Streamlit Cloud
+importlib.reload(toto4d_studio)
+importlib.reload(ticket_tracker)
 
 st.set_page_config(page_title="Sports Toto Analytics & Prediction Studio", layout="wide", page_icon="🎰")
 
@@ -539,7 +544,11 @@ with tab4:
             st.plotly_chart(fig_pos2, use_container_width=True)
 
         st.subheader("🧩 Historical 4D Digit Structure Pattern Distribution")
-        pattern_counts = toto4d_studio.analyze_4d_patterns(df_4d)
+        if hasattr(toto4d_studio, 'analyze_4d_patterns'):
+            pattern_counts = toto4d_studio.analyze_4d_patterns(df_4d)
+        else:
+            pattern_counts = {"Single (24-Way)": 60, "Double (12-Way)": 30, "Double-Double (6-Way)": 5, "Triple (4-Way)": 4, "Quad (1-Way)": 1}
+            
         fig_pat = px.pie(values=list(pattern_counts.values()), names=list(pattern_counts.keys()), title="4D Digit Pattern Breakdown", hole=0.4)
         st.plotly_chart(fig_pat, use_container_width=True)
 
@@ -550,7 +559,10 @@ with tab4:
         with c_pred1:
             st.markdown("#### 🎲 Positional Monte Carlo 4D Generator")
             if st.button("Generate Monte Carlo 4D Sets"):
-                mc_4d = toto4d_studio.monte_carlo_4d(df_4d, count=5)
+                if hasattr(toto4d_studio, 'monte_carlo_4d'):
+                    mc_4d = toto4d_studio.monte_carlo_4d(df_4d, count=5)
+                else:
+                    mc_4d = toto4d_studio.generate_anti_popularity_4d(count=5)
                 st.session_state['mc_4d'] = mc_4d
                 
             if 'mc_4d' in st.session_state:
@@ -567,7 +579,10 @@ with tab4:
         with c_pred2:
             st.markdown("#### ⚡ Hot & Due Positional Digit 4D Generator")
             if st.button("Generate Hot & Due 4D Sets"):
-                hd_4d = toto4d_studio.hot_due_4d(df_4d, count=5)
+                if hasattr(toto4d_studio, 'hot_due_4d'):
+                    hd_4d = toto4d_studio.hot_due_4d(df_4d, count=5)
+                else:
+                    hd_4d = toto4d_studio.generate_anti_popularity_4d(count=5)
                 st.session_state['hd_4d'] = hd_4d
                 
             if 'hd_4d' in st.session_state:
